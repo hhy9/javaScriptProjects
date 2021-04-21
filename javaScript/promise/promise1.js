@@ -208,3 +208,178 @@ requestData1() // 프로미스를 반환하는 함수 여기서 비동기처리�
           })
       }
       requestData().then(data => console.log(data))
+
+      // -------------------------------
+
+      requestData1() // 각각의 처리가 병렬로 처리되지않음 
+         .then(data => {
+             console.log(data);
+             return requestData2();
+         })
+         .then(data => {
+             console.log(data);
+         })
+
+   
+      requestData1().then(data => console.log(data));
+      requestData2().then(data => console.log(data));
+      // 이제 2번함수를 1번함수를 기다리지않음 
+      // 두비동기처리는 거의 동시에 처리함
+
+      // 여러 promise를 병렬로 처리하고싶을땐
+      Promise.all([requestData1(), requestData2()]).then(([data1,data2]) => {
+          console.log(data1,data2)
+      }) // 배열에 원하는 갯수만큼 객체입력
+      // 입력된 모든 객체가 fulfilled상태가되어야 then
+
+
+      Promise.race([ // 여러개의 promise중에서 가장빨리 settled상태가된 promise를 반환
+         requestData(), // 이게 늦게실행되면 reject가 실행
+         new Promise((_, reject)=> setTimeout(reject, 3000))
+      ])
+      .then(data => console.log('fulfilled',data))
+      .catch(error => console.log('rejected'));
+
+      // --------------------------
+
+      let cachedPromise;
+      function getData() {
+         cachedPromise = cachedPromise || requestData();
+         return cachedPromise;
+      }
+      // promise를 이용하여 데이터 캐싱을 구현함
+      getData().then( v => console.log(v));
+      // 처음에 호출할때 requestData 실행 => promise객체가 만들어지고
+      // 그것이 캐싱이됨
+
+      getData().then( v => console.log(v));
+      // 그리고 두번째 호출하면 캐싱되었던 promise가
+      // 그대로 가져옴
+
+      // ------------------------------
+      Promise.resolve(10)
+         .then(data => {
+               console.log(data);
+               Promise.resolve(20);// return 을 안하면 밑에서 undefined
+         })
+         .then(data => {
+               console.log(data) 
+         })
+
+         // -----------------------
+  
+         // then메서드는 기존 객체를 수정하지않고 
+         // 새로운 promise객체를 반환
+   function requestData() {
+       const p = Promise.resolve(10);
+       p.then(data=> {
+           return data + 20;
+       }) // then을 사용후
+       return p; //  이전 promise객체를 반환 그러나 이러면 10이출력됨
+
+       // return p.then(data => {
+      //       return data+20;
+      //  }) 이렇게 사용해야함
+   }
+
+   requestData().then(v => {
+       console.log(v);
+   })
+
+   // -------------------------------------------
+
+// 중첩해서 사용 x
+      requestData1() 
+         .then(result => {
+             return requestData2(result).then(result2 => {
+                 console.log({ result2 });
+             });
+         })
+         .then( ()=> {
+             console.log('end');
+         })
+
+  // 이렇게 연결하여 사용 
+         requestData1() 
+         .then(result => {
+             return requestData2(result)
+         }).then(result2 => {
+            console.log({ result2 });
+        })
+         .then( ()=> {
+             console.log('end');
+         })
+
+// -------------------------------------------------
+
+// 한개의 데이터만 넘어감 두번째 then에서 result1를 참조하려면?
+requestData1() 
+.then(result1 => {
+    return requestData2(result1)
+}).then((result1, result2) => {
+   console.log({ result1,result2 });
+})
+
+// promise중첩
+
+requestData1() 
+.then(result1 => {
+    return requestData2(result1).then(result2 => { // 두번째 데이터까지 받아놓고 배열형식으로 반환
+       console.log({ reulst2 });
+       return [result1,result2];
+    });
+}).then(([result1, result2]) => {
+   console.log({ result1,result2 });
+})
+
+
+// promise를 중첩하지않고
+requestData1() 
+   .then(result1 => { // result1 처럼 promise가 아닌 값을 넣으면 promise객체처럼 처리(fulfilled)
+       return Promise.all([result11, requestData2(result1)]);
+   })
+   .then(([result1, result2]) => {
+      // ...
+   }) 
+
+// ------------------
+
+// 동기코드와 같이 사용하는 경우
+// 예외처리에 신경써야함
+
+function doSync() {
+    throw new Error('some error');
+}
+
+function requestData() {
+    doSync(); // 동기함수에서 예외가 발생하는경우 예외처리하는곳이 없어서 문제가될수잇음
+    return fetch()
+      .then(data => console.log(data))
+      .catch(error => console.log(error)); // 동기함수에서 예외처리가 catch에서 실행되지않음
+
+    
+
+}
+
+  // 만약 doSync라는 함수가 반드시 fetch전에 호출되어야하는게 아니라면
+   // 이와같이 then메서드안쪽으로 넣어주는게좋음 -> catch메서드안에서 처리가능
+  function requestData() {
+   
+   return fetch()
+     .then(data => {
+      doSync();   
+      console.log(data)})
+     .catch(error => console.log(error)); 
+  }
+
+  // 만약 doSync가 fetch전에 처리되어야한다면
+
+  function requestData() {
+      return Promise.resolve() // fulfilled상태인 promise객체를만들고
+         .then(doSync) // doSync를 호출 => 그럼 doSync안에서 발생한 예외는 결국 catch쪽에서 처리
+         .then(fetch)
+         .then(data => {
+             console.log(data);
+         })
+         .catch(error => console.log(error));
+  }
